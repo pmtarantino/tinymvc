@@ -2,6 +2,24 @@
 
 class Controller{
 
+	public static function status_code($status_code){
+		http_response_code($status_code);
+	}
+
+	public static function content_type($type){
+		// Some shortcuts
+		if($type == 'text' or $type == 'plain'){
+			$content_type = "text/plain";
+		} elseif($type == 'html'){
+			$content_type = "text/html";
+		} elseif($type == "json"){
+			$content_type = "application/json";
+		}
+		$content_type = (isset($content_type)) ? $content_type : $type;
+
+		header("Content-Type: " . $content_type);
+	}
+
 }
 
 class Router{
@@ -26,7 +44,7 @@ class Router{
 
 		if(array_key_exists('url', $_GET)){
 			// There is something in the URL
-			$endpoint = rtrim($_GET['url'],'/'); // Remove last dash if is in there
+			$endpoint = rtrim($_GET['url'],'/'); // Remove last slash if it is in there
 		} else {
 			// Endpoint is empty, then I set it for the index
 			$endpoint = '/';
