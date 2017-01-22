@@ -32,15 +32,25 @@ class Database{
 		}
 	}
 
-	public static function run($query,$values){
-		$instance = self::get_instance();
+	public static function prepare($query){
+	$instance = self::get_instance();
 		if(!$instance->connection){
 			trigger_error("Database connection not configured", E_USER_ERROR);
 		} else {
 			$pre = $instance->connection->prepare($query);
-			$pre->execute($values);
-			return $pre->fetchAll(PDO::FETCH_ASSOC);
+			return $pre;
 		}
+	}
+
+	public static function run($query,$values=array()){
+		$pre = self::prepare($query);
+		return $pre->execute($values);
+	}
+
+	public static function fetch($query,$values=array(),$object=__CLASS__){
+		$pre = self::prepare($query);
+		$pre->execute($values);
+		return $pre->fetchAll(PDO::FETCH_CLASS, $object );
 	}
 
 	public static function last_id(){
@@ -65,19 +75,18 @@ class Model{
 	protected $attr = array();
 
 	public static function fetchAll(){
-		return Database::query("SELECT * FROM `" . static::$table ."`");
+		return Database::fetch("SELECT * FROM `" . static::$table ."`",array(),get_called_class());
 	}
 
 	public static function fetch($id){
-		$result = Database::run("SELECT * FROM `" . static::$table . "` WHERE " . static::$primary_key . " = ? LIMIT 1",array($id));
+		$result = Database::fetch("SELECT * FROM `" . static::$table . "` WHERE " . static::$primary_key . " = ? LIMIT 1",array($id),get_called_class());
 		// Return a new object with the information that I get from the database
-		$new_obj = new static;
-		$new_obj->set_attr($result[0]);
+		$new_obj = $result[0];
 		$new_obj->new = false;
 		return $new_obj;
 	}
 
-	public static function update($attr){
+	protected static function update($attr){
 		$fields = '';
 		$binds = array();
 		foreach($attr as $key => $value){
@@ -94,7 +103,7 @@ class Model{
 		WHERE " . static::$primary_key . " = :primary_key LIMIT 1", $binds);
 	}
 
-	public static function create($attr){
+	protected static function create($attr){
 		$fields = '';
 		$placeholders = '';
 		$binds = array();
@@ -110,7 +119,7 @@ class Model{
 	}
 
 	// Set an array as all the attributes of the record
-	public function set_attr($attributes){
+	protected function set_attr($attributes){
 		$this->attr = $attributes;
 	}
 
@@ -126,12 +135,21 @@ class Model{
 
 	public function save(){
 		if($this->is_new()){
-			$this->create($this->attr);
-			$this->__set(static::$primary_key,Database::last_id());
-			$this->new = false;
+			if($this->create($this->attr)) {
+				$this->__set(static::$primary_key,Database::last_id());
+				$this->new = false;
+				return true;
+			}
+			return false;
 		} else {
-			$this->update($this->attr);
+			return $this->update($this->attr);
 		}
+	}
+
+	public function delete(){
+		return Database::run("DELETE FROM `" . static::$table . "` WHERE " . static::$primary_key . " = ? LIMIT 1",
+			array($this->__get(static::$primary_key))
+		);
 	}
 
 	public function is_new(){
